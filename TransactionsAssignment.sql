@@ -248,7 +248,11 @@ begin
 
             declare
 
-        
+            begin
+                insert into INVENTORY5123 (PRODUCTID, LOCATIONID, NUMINSTOCK)
+                values (@PRODID, @PLOCID, 13);               
+            end
+        commit transaction
     end try
 
     begin catch
