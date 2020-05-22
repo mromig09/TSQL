@@ -246,12 +246,23 @@ begin
             insert into [LOCATION5123] (LOCATIONID, LOCNAME, ADDRESS, MANAGER) 
             values (@PLOCID, @PLOCNAME, @PLOCADDRESS, @PMANAGER);
 
-            declare
+            declare @PRODID integer
+            set @PRODID = 0
 
-            begin
-                insert into INVENTORY5123 (PRODUCTID, LOCATIONID, NUMINSTOCK)
-                values (@PRODID, @PLOCID, 13);               
-            end
+                declare product_cursor cursor local for select PRODUCTID from PRODUCT5123;
+                    open product_cursor;
+                    fetch from product_cursor into @PRODID;
+
+                    while @@fetch_status = 0
+                    begin
+                        insert into INVENTORY5123 (PRODUCTID, LOCATIONID, NUMINSTOCK)
+                        values (@PRODID, @PLOCID, 13);       
+
+                        fetch next from product_cursor into @PRODID;        
+                    end
+
+                close product_cursor
+            deallocate product_cursor
         commit transaction
     end try
 
@@ -269,9 +280,13 @@ begin
 end;
 
 go
+exec ADD_LOCATION @PLOCID = 'MLB5555', @PLOCNAME = 'Springfield', @PLOCADDRESS = '742 Evergreen Terrace', @PMANAGER = 'Homer Simpson'
+exec ADD_LOCATION @PLOCID = 'MLB3931', @PLOCNAME = 'Langley Falls', @PLOCADDRESS = '1024 Cherry Street', @PMANAGER = 'Steve Smith'
+exec ADD_LOCATION @PLOCID = 0, @PLOCNAME = 'Rhode Island', @PLOCADDRESS = '31 Spooner Street', @PMANAGER = 'Peter Griffon'
 
-    exec ADD_LOCATION @PLOCID = MLB3931;
-
+select * from PRODUCT5123
+select * from INVENTORY5123
+select * from LOCATION5123
     -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
     -- insert the specified values into the table LOCATION5123
     -- ADD A ROW FOR THIS LOCATION TO THE INVENTORY5123 TABLE **FOR EACH** PRODUCT IN THE PRODUCT5123 TABLE
