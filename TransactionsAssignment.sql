@@ -229,7 +229,17 @@ END;
 
 GO
 ----------------------------
+    -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
+    -- insert the specified values into the table LOCATION5123
+    -- ADD A ROW FOR THIS LOCATION TO THE INVENTORY5123 TABLE **FOR EACH** PRODUCT IN THE PRODUCT5123 TABLE
+    -- I.E. IF THERE ARE 4 PRODUCTS THIS WILL BE 4 NEW ROWS IN THE INVENTORY TABLE
+    -- RETURN THE LOCID OF THE NEW LOCATION
 
+    -- EXCEPTIONS
+    -- if the location id is a duplicate throw error: number 51001  message : 'Duplicate Location ID'
+    -- for any other errors throw error : number 50000  message:  error_message()
+
+---------------------------------------------Add Location---------------------------------------------
 
 IF OBJECT_ID('ADD_LOCATION') IS NOT NULL
 DROP PROCEDURE ADD_LOCATION;
@@ -240,9 +250,8 @@ CREATE PROCEDURE ADD_LOCATION @PLOCID INT, @PLOCNAME NVARCHAR(50), @PLOCADDRESS 
 begin
     begin try
         begin transaction
-            if @PLOCID = MLB3931
-            throw 51001, 'Duplicate location ID (ADD_LOCATION)', 1
-
+            --if @PLOCID = MLB3931
+            --throw 51001, 'Duplicate location ID (ADD_LOCATION)', 1
             insert into [LOCATION5123] (LOCATIONID, LOCNAME, ADDRESS, MANAGER) 
             values (@PLOCID, @PLOCNAME, @PLOCADDRESS, @PMANAGER);
 
@@ -280,6 +289,9 @@ begin
 end;
 
 go
+--exception to add location
+--execption to throw duplicate error
+--exception to throw error
 exec ADD_LOCATION @PLOCID = 'MLB5555', @PLOCNAME = 'Springfield', @PLOCADDRESS = '742 Evergreen Terrace', @PMANAGER = 'Homer Simpson'
 exec ADD_LOCATION @PLOCID = 'MLB3931', @PLOCNAME = 'Langley Falls', @PLOCADDRESS = '1024 Cherry Street', @PMANAGER = 'Steve Smith'
 exec ADD_LOCATION @PLOCID = 0, @PLOCNAME = 'Rhode Island', @PLOCADDRESS = '31 Spooner Street', @PMANAGER = 'Peter Griffon'
@@ -287,52 +299,94 @@ exec ADD_LOCATION @PLOCID = 0, @PLOCNAME = 'Rhode Island', @PLOCADDRESS = '31 Sp
 select * from PRODUCT5123
 select * from INVENTORY5123
 select * from LOCATION5123
-    -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
-    -- insert the specified values into the table LOCATION5123
-    -- ADD A ROW FOR THIS LOCATION TO THE INVENTORY5123 TABLE **FOR EACH** PRODUCT IN THE PRODUCT5123 TABLE
-    -- I.E. IF THERE ARE 4 PRODUCTS THIS WILL BE 4 NEW ROWS IN THE INVENTORY TABLE
-    -- RETURN THE LOCID OF THE NEW LOCATION
 
-    -- EXCEPTIONS
-    -- if the location id is a duplicate throw error: number 51001  message : 'Duplicate Location ID'
-    -- for any other errors throw error : number 50000  message:  error_message()
+-----------------------------------------Get Location by ID-------------------------------------------
 
-
-
-IF OBJECT_ID('GET_LOCATION_BY_ID') IS NOT NULL
-DROP PROCEDURE GET_LOCATION_BY_ID ;
-GO
-
-/*
-CREATE PROCEDURE GET_LOCATION_BY_ID @PLOCID INT AS
-BEGIN
-    -- return the specified location.
+-- return the specified location.
 
     -- EXCEPTIONS
     -- if the location id is invalid throw error: number 51002  message : 'Location Doesnt Exist'
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+IF OBJECT_ID('GET_LOCATION_BY_ID') IS NOT NULL
+DROP PROCEDURE GET_LOCATION_BY_ID ;
+GO
 
+CREATE PROCEDURE GET_LOCATION_BY_ID @PLOCID INT, @PRETURNSTRING nvarchar(1000) output  AS
+BEGIN
+    begin try
+        select @PLOCID = concat ('Location ID:', LOCATIONID, 'Location Name:', LOCNAME, 'Address', ADDRESS, 'Manager', MANAGER)
+        from LOCATION5123 
+        where @PLOCID = LOCATIONID
+    end try
 
+    begin catch
+        if error_number() = ' '
+            throw 51002, 'Location does not exist', 1
+        else if error_number() = 50000
+            throw
+        else  
+            begin 
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end;
+    end catch;
+end;
+
+begin
+    declare @output nvarchar(1000);
+        exec GET_LOCATION_BY_ID @PLOCID = ' ', @PRETURNSTRING = @output output;
+        exec GET_LOCATION_BY_ID @PLOCID = 'MLB5555', @PRETURNSTING = @output output;
+end;
+--------------------------------------------Add Product-----------------------------------------------
+
+   -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
+    -- insert the specified values into the table PRODUCT5123
+    -- ADD A ROW FOR THIS PRODUCT TO THE INVENTORY5123 TABLE **FOR EACH** LOCTAION IN THE LOCATION5123 TABLE
+    -- I.E. IF THERE ARE 4 LOCATIONS THIS WILL BE 4 NEW ROWS IN THE INVENTORY TABLE
+    -- RETURN THE NEW PRODUCTS PRODUCTID   
 IF OBJECT_ID('ADD_PRODUCT') IS NOT NULL
 DROP PROCEDURE ADD_PRODUCT ;
 GO
 
-/*
+
 CREATE PROCEDURE ADD_PRODUCT @PPRODNAME NVARCHAR(100), @PBUYPRICE MONEY, @PSELLPRICE MONEY AS
-BEGIN
+begin
+    begin try
+        begin transaction
+            insert into PRODUCT5123 (PRODNAME, PBUYPRICE, SELLPRICE)
+            values (@PRODNAME, @PBUYPRICE, @PSELLPRICE);
 
-    -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
-    -- insert the specified values into the table PRODUCT5123
-    -- ADD A ROW FOR THIS PRODUCT TO THE INVENTORY5123 TABLE **FOR EACH** LOCTAION IN THE LOCATION5123 TABLE
-    -- I.E. IF THERE ARE 4 LOCATIONS THIS WILL BE 4 NEW ROWS IN THE INVENTORY TABLE
-    -- RETURN THE NEW PRODUCTS PRODUCTID
+            declare @PRODNAME integer
+            declare @LOCATIONID nvarchar(8)
 
+                declare location_cursor cursor local for select LOCATIONID from [LOCATION5123];
+                    open location_cursor;
+                    fetch from location_cursor into @LOCATIONID
+
+                    while @@fetch_status = 0
+                    
+                    begin
+                        insert into INVENTORY5123 (PRODUCTID, LOCATIONID, NUMINSTOCK)
+                        values (@PRODID, @LOCATIONID, 50);
+
+                        fetch next from location_cursor into @LOCATIONID
+                    end
+                close location_cursor
+                deallocate location_cursor
+        commit transaction;
+    end try
+    begin catch
+            begin 
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end;
+    end catch;
+ end;
     -- EXCEPTIONS
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+exec ADD_PRODUCT @PRODNAME = 'Zelda: Breath of the Wild', @PBUYPRICE = 79, @SELLPRICE = 50
+exec ADD_PRODUCT @PRODNAME = 'Nintendo Switch', @BUYPRICE = 350, @SELLPRICE = 250
+
 
 
 IF OBJECT_ID('GET_PRODUCT_BY_ID') IS NOT NULL
