@@ -348,7 +348,6 @@ IF OBJECT_ID('ADD_PRODUCT') IS NOT NULL
 DROP PROCEDURE ADD_PRODUCT ;
 GO
 
-
 CREATE PROCEDURE ADD_PRODUCT @PPRODNAME NVARCHAR(100), @PBUYPRICE MONEY, @PSELLPRICE MONEY AS
 begin
     begin try
@@ -387,31 +386,45 @@ begin
 exec ADD_PRODUCT @PRODNAME = 'Zelda: Breath of the Wild', @PBUYPRICE = 79, @SELLPRICE = 50
 exec ADD_PRODUCT @PRODNAME = 'Nintendo Switch', @BUYPRICE = 350, @SELLPRICE = 250
 
+-----------------------------------------Get Product by ID--------------------------------------------
 
-
+-- return the specified PRODUCT.
 IF OBJECT_ID('GET_PRODUCT_BY_ID') IS NOT NULL
 DROP PROCEDURE GET_PRODUCT_BY_ID ;
 GO
 
-/*
-CREATE PROCEDURE GET_PRODUCT_BY_ID @PPRODID INT AS
-BEGIN
-    -- return the specified PRODUCT.
+CREATE PROCEDURE GET_PRODUCT_BY_ID @PPRODID INT, @PRETURNSTRING nvarchar(1000) output AS
+begin
+    begin try
+        select @PPRODID = concat ('Product ID: ', PRODUCTID, 'Product Name: ', PRODNAME, 'Buy Price: ', BUYPRICE, 'Sell Price: ', SELLPRICE)
+        from PRODUCT5123
+        where @PPRODID = PRODUCTID
+    end try
 
-    -- EXCEPTIONS
-    -- if the PRODUCT id iis invalid throw error: number 52002  message : 'Product Doesnt Exist'
+    begin catch
+        if error_number() = ' '
+            throw 52002, 'Product Doesnt Exist', 1
+        else if error_number() = 50000
+            throw 
+        else
+            begin
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end;
+        end catch;
+end;
+
+begin
+    declare @output nvarchar(1000);
+        exec GET_PRODUCT_BY_ID @PPRODID = ' ', @PRETURNSTRING = @output output;
+        exec GET_PRODUCT_BY_ID @PPRODID = 'Car', @PRETURNSTRING = @output output;
+end;
+
+-- EXCEPTIONS
+    -- if the PRODUCT id is invalid throw error: number 52002  message : 'Product Doesnt Exist'
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
-
-
-IF OBJECT_ID('PURCHASE_STOCK') IS NOT NULL
-DROP PROCEDURE PURCHASE_STOCK;
-GO
-
-/*
-CREATE PROCEDURE PURCHASE_STOCK @PPRODID INT, @PLOCID INT, @PQTY INT AS
-BEGIN
+    
+-------------------------------------------Purchase Stock----------------------------------------------
 
     -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
 
@@ -422,57 +435,120 @@ BEGIN
     -- DECREASE THE ASSETCASH ROW IN THE GENERAL LEDGER BY THE TOTAL AMOUNT OF THE ORDER
     -- INCREASE THE ASSETSTOCK ROW IN THE GENERAL LEDGER BY THE TOTAL AMOUNT OF THE ORDER
 
-    -- EXCEPTIONS
+IF OBJECT_ID('PURCHASE_STOCK') IS NOT NULL
+DROP PROCEDURE PURCHASE_STOCK;
+GO
+
+CREATE PROCEDURE PURCHASE_STOCK @PPRODID INT, @PLOCID INT, @PQTY INT AS
+begin
+    begin tran
+        begin try
+            declare @TOTAL integer
+            select @TOTAL = BUYPRICE from PRODUCT5123
+            set @TOTAL = @TOTAL * @PQTY
+
+            insert into PURCHASEORDER5123(PRODUCTID, LOCATIONID, DATETIMECREATED, QUANTITY, TOTAL)
+            values (@PRODID, @PLOCID, GETDATE(), @PQTY, @TOTAL)
+
+            update INVENTORY5123
+            set NUMINSTOCK = NUMINSTOCK + @PQTY
+            where PRODUCTID = @PRODID and LOCATIONID = @PLOCID
+
+            update GENERALLEDGER5123
+            set AMOUNT = AMOUNT - @TOTAL
+            where [DESCRIPTION] = 'ASSETSCASH'
+
+            update GENERALLEDGER5123
+            set AMOUNT = AMOUNT + @TOTAL
+            where [DESCRIPTION] = 'ASSETSCASH'
+        commit tran;
+    end try
+
+    begin catch
+        rollback tran;
+            if error_message() like '%FK_PURCHASEORDER_PRODUCT%'
+                throw 52002, 'Product Doesnt Exist', 1
+
+            else if error_message() like '%FK_PURCHASEORDER_LOCATION%'
+                throw 51002, 'Location Doesnt Exist', 1
+
+            else if error_number() = 59001
+                throw;
+            else
+                begin
+                    declare @errormessage nvarchar(max) = error_message();
+                    throw 50000, @errormessage, 1
+                end
+    end catch;
+end;
+
+exec PURCHASE_STOCK @PRODID = 10001, @PLOCID = MLB3931, @PQTY = 1;
+
+-- EXCEPTIONS
     -- if the LOCATUON id is invalid throw error: number 51002  message : 'Location Doesnt Exist'
     -- if the PRODUCT id is invalid throw error: number 52002  message : 'Product Doesnt Exist'
     -- IF THERE IS INSUFFICIENT ASSETSCASH IN THE GENERAL LEDGER THEN THROW ERROR: 59001 MESSAGE : 'INSUFFICIENT CASH'
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+
+------------------------------------------Add Client Account-------------------------------------------
+
+-- insert the specified values into the table CLIENTACCOUNT5123
+-- RETURN THE NEW ACCOUNTS ACCOUNTID
 
 IF OBJECT_ID('ADD_CLIENT_ACCOUNT') IS NOT NULL
 DROP PROCEDURE ADD_CLIENT_ACCOUNT;
 GO
 
-/*
-CREATE PROCEDURE ADD_CLIENT_ACCOUNT @PACCTNAME NVARCHAR(100), @PBALANCE MONEY, @PCREDITLIMIT MONEY AS
-BEGIN
+CREATE PROCEDURE ADD_CLIENT_ACCOUNT @PACCTNAME NVARCHAR(100), @PBALANCE MONEY, @PCREDITLIMIT MONEY, @PACCOUNTID NVARCHAR(1000) AS
+begin
+    begin try
+        insert into CLIENTACCOUNT5123 (ACCTNAME, BALANCE, CREDITLIMIT)
+        values (@PACCTNAME, @PBALANCE, @PCREDITLIMIT)
 
-    -- insert the specified values into the table CLIENTACCOUNT5123
-    -- RETURN THE NEW ACCOUNTS ACCOUNTID
+        set @PACCOUNTID = concat('Account ID: ' , @@IDENTITY);
+    end try
 
+    begin catch
+        if error_number() = 2627
+            throw 53001, 'Duplicate Account Name', 1
+        else
+            begin
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end
+    end catch
+end;
+
+select * from CLIENTACCOUNT5123
+    begin
+        declare @OT as nvarchar(1000)
+        exec ADD_CLIENT_ACCOUNT @PACCTNAME='Itachi', @PBALANCE = 1000, @PCREDITLIMIT = 10000, @PACCOUNTID = @OT output
+        select @OT
+    end;
     -- EXCEPTIONS
     -- ACCOUNT NAME ALREADY EXISTS - SEE TABLE CONSTRAINTS - THROW ERROR 53001 : DUPLICATE ACCOUNT NAME
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+
+------------------------------------------Add Authorized Person------------------------------------------
+
+    -- insert the specified values into the table AUTHORISEDPERSON5123
+    -- RETURN THE NEW USERS USER ID
 
 IF OBJECT_ID('ADD_AUTHORISED_PERSON') IS NOT NULL
 DROP PROCEDURE ADD_AUTHORISED_PERSON;
 
 GO
 
-/*
 CREATE PROCEDURE ADD_AUTHORISED_PERSON @PFIRSTNAME NVARCHAR(100), @PSURNAME NVARCHAR(100), @PEMAIL NVARCHAR(100), @PPASSWORD NVARCHAR(100), @PACCOUNTID INT AS
-BEGIN
+begin
 
-    -- insert the specified values into the table AUTHORISEDPERSON5123
-    -- RETURN THE NEW USERS USER ID
+end;
 
     -- EXCEPTIONS
     -- EMAIL IS INVALID (DOESN'T CONTAIN AN @ - SEE TABLE CONSTRAINTS)  - THROW ERROR 53003 : INVALID EMAIL ADDRESS
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
 
-IF OBJECT_ID('MAKE_ACCOUNT_PAYMENT') IS NOT NULL
-DROP PROCEDURE MAKE_ACCOUNT_PAYMENT;
-
-GO
-
-/*
-CREATE PROCEDURE MAKE_ACCOUNT_PAYMENT @PACCOUNTID INT, @PAMOUNT MONEY AS
-BEGIN
+------------------------------------------Make Account Payment------------------------------------------
 
     -- THE FOLLOWING MUST BE COMPLETED AS A SINGLE TRANSACTION
     -- insert the specified values into the table ACCOUNTPAYMENT5123 (USING THE CURRENT SYS DATETIME)
@@ -480,12 +556,21 @@ BEGIN
     -- UPDATE THE GENERAL LEDGER TO REDUCE ACCOUNT ASSETS BY THE PAYMENT AMOUNT
     -- UPDATE THE GENERAL LEDGER TO INCREASE CASH ASSETS BY THE PAYMENT AMOUNT
 
+IF OBJECT_ID('MAKE_ACCOUNT_PAYMENT') IS NOT NULL
+DROP PROCEDURE MAKE_ACCOUNT_PAYMENT;
+
+GO
+
+CREATE PROCEDURE MAKE_ACCOUNT_PAYMENT @PACCOUNTID INT, @PAMOUNT MONEY AS
+begin
+
+end;
+
     -- EXCEPTIONS
     -- ACCOUNT DOESNT EXIST THROW ERROR 53002 : ACCOUNT DOES NOT EXIST 
     -- PAYMENT AMOUNT IS NEGATIVE (SEE TABLE CONSTRAINTS) THROW ERROR 53004 :   ACCOUNT PAYMENT AMOUNT MUST BE POSITIVE  
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+
 
 
 IF OBJECT_ID('GET_CLIENT_ACCOUNT_BY_ID') IS NOT NULL
