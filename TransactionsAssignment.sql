@@ -541,12 +541,41 @@ GO
 
 CREATE PROCEDURE ADD_AUTHORISED_PERSON @PFIRSTNAME NVARCHAR(100), @PSURNAME NVARCHAR(100), @PEMAIL NVARCHAR(100), @PPASSWORD NVARCHAR(100), @PACCOUNTID INT AS
 begin
+    begin try
+        insert into AUTHORISEDPERSON5123 (FIRSTNAME, SURNAME, EMAIL, [PASSWORD], ACCOUNTID)
+        values (@PFIRSTNAME, @PSURNAME, @PEMAIL, @PPASSWORD, @PACCOUNTID)
 
+        set @NEWUSERID = concat('New User ID: ' , @@IDENTITY)
+    end try
+
+    begin catch
+        if error_number() = 547
+            throw 53003, 'Invalid Email Address', 1
+        else
+            begin
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end
+    end catch        
 end;
 
     -- EXCEPTIONS
     -- EMAIL IS INVALID (DOESN'T CONTAIN AN @ - SEE TABLE CONSTRAINTS)  - THROW ERROR 53003 : INVALID EMAIL ADDRESS
     -- for any other errors throw error : number 50000  message:  error_message()
+select * from CLIENTACCOUNT5123
+select * from AUTHORISEDPERSON5123
+
+begin
+    declare @OT as NVARCHAR(30);
+    exec ADD_AUTHORISED_PERSON @PFIRSTNAME='Itachi', @PSURNAME='Uchiha', @PEMAIL='Uchiha.Itachi12@gmail.com', @PPASSWORD='hiddenleaf', @PACCOUNTID=30002, @NEWUSERID = @OT output
+    select @OT
+end;
+
+begin
+    declare @OT as NVARCHAR(30)
+    exec ADD_AUTHORISED_PERSON @PFIRSTNAME='Naruto', @PSURNAME='Uzumaki', @PEMAIL='Uzumaki.Naruto@gmail.com', @PPASSWORD='theBestHokage', @PAACOUNTID=30002, @NEWUSERID = @OT output
+    select @OT
+end;
 
 ------------------------------------------Make Account Payment------------------------------------------
 
@@ -563,33 +592,101 @@ GO
 
 CREATE PROCEDURE MAKE_ACCOUNT_PAYMENT @PACCOUNTID INT, @PAMOUNT MONEY AS
 begin
+    begin tran
+        begin try
+            if @PAMOUNT < 0
+                throw 53002, 'negative number', 1;
+            else if (select ACCOUNTID from CLIENTACCOUNT5123 where ACCOUNTID = @PACCOUNTID) is null
+                throw 53002, 'Account does not exist', 1
+            else
+                insert into ACCOUNTPAYMENT5123 (ACCOUNTID, DATETIMERECIEVED, AMOUNT)
+                values (@PACCOUNTID, GETDATE(), @PAMOUNT);
 
+                update CLIENTACCOUNT5123
+                set BALANCE = BLANCE - @PAMOUNT
+                where ACCOUNTID = @PACCOUNTID;
+
+                update GENERALLEDGER5123
+                set AMOUNT = AMOUNT - @PAMOUNT
+                where [DESCRIPTION]='ASSETSACCOUNT';
+
+                update GENERALLEDGER5123
+                set AMOUNT = AMOUNT + @PAMOUNT
+                where [DESCRIPTION]='ASSETSCASH';
+        commit tran
+    end try
+
+    begin  catch
+        rollback tran;
+            if error_message() like '%FK_ACCOUNTPAYMENT_ACCOUNT%'
+                throw 53002, 'Account does not exist', 1
+            else if error_message() like '%CHK_ACCOUNTPAYMENT_AMOUNT%'
+                throw 53004, ' Accout Payment Must be Positive', 1
+
+            else
+                begin
+                    declare @errormessage nvarchar(max) = error_message();
+                    throw 50000, @errormessage, 1
+                end
+            end catch
 end;
+
+Select * from GENERALLEDGER5123
+Select * from ACCOUNTPAYMENT5123
+
+begin
+    exec MAKE_ACCOUNT_PAYMENT @PACCOUNTID = 30006, @PAMOUNT = 6
+end
 
     -- EXCEPTIONS
     -- ACCOUNT DOESNT EXIST THROW ERROR 53002 : ACCOUNT DOES NOT EXIST 
     -- PAYMENT AMOUNT IS NEGATIVE (SEE TABLE CONSTRAINTS) THROW ERROR 53004 :   ACCOUNT PAYMENT AMOUNT MUST BE POSITIVE  
     -- for any other errors throw error : number 50000  message:  error_message()
 
-
+----------------------------------------Get Client Account By ID---------------------------------------
 
 IF OBJECT_ID('GET_CLIENT_ACCOUNT_BY_ID') IS NOT NULL
 DROP PROCEDURE GET_CLIENT_ACCOUNT_BY_ID;
 
 GO
 
-/*
 CREATE PROCEDURE GET_CLIENT_ACCOUNT_BY_ID @PACCOUNTID INT AS
-BEGIN
+begin
+    begin try
+        set @PRETURNSTRING = (select concat('Account ID: ', A.ACCOUNTID, 'Account Name: ', ACCTNAME, 'Balance: ', BALANCE, 'Credit Limit: ', CREDITLIMIT, 'Authorized: ', A.FIRSTNAME)
+        from CLIENTACCOUNT5123 C inner join AUTHORISEDPERSON5123 A on C.ACCOUNTID = A.ACCOUNTID
+        where C.ACCOUNTID = @PACCOUNTID);
+
+        if @PRETURNSTRING is null
+            throw 53002, 'Account does not exist', 1;
+    end try
+
+    begin catch
+        if error_number() = 53002
+            throw;
+        else
+            begin
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end
+    end catch
+end;
 
     -- return the specified CLIENT ACCOUNT INCLUDING AND ALL AUTHORISED PERSONS DETAILS
 
     -- EXCEPTIONS
      -- ACCOUNT DOESNT EXIST THROW ERROR 53002 : ACCOUNT DOES NOT EXIST 
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+select * from AUTHORISEDPERSON5123
+select * from CLIENTACCOUNT5123
 
+begin
+    declare @OT nvarchar(1000)
+        exec GET_CLIENT_ACCOUNT_BY_ID @PACCOUNTID = 30001, @PRETURNSTRING = @OT output
+        select @OT
+end;
+
+----------------------------------------------Create Order----------------------------------------------
 
 IF OBJECT_ID('CREATE_ORDER') IS NOT NULL
 DROP PROCEDURE CREATE_ORDER;
