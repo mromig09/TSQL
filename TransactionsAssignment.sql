@@ -688,39 +688,93 @@ end;
 
 ----------------------------------------------Create Order----------------------------------------------
 
+-- insert the specified values into the table ORDER5123
+    -- SET THE TOTAL TO 0
+    -- RETURN THE NEW ORDERS ORDERID
+
 IF OBJECT_ID('CREATE_ORDER') IS NOT NULL
 DROP PROCEDURE CREATE_ORDER;
 GO
 
-/*
-CREATE PROCEDURE CREATE_ORDER  @PSHIPPINGADDRESS NVARCHAR(200), @PUSERID INT AS
+
+CREATE PROCEDURE CREATE_ORDER  @PSHIPPINGADDRESS NVARCHAR(200), @PUSERID INT, @PRETURNORDERID NVARCHAR(24) OUTPUT AS
 BEGIN
+    begin try
+        insert into ORDER5123(SHIPPINGADDRESS, DATETIMECREATED, TOTAL, USERID) values
+        (@PSHIPPINGADDRESS, GETDATE(), 1, @PUSERID)
 
-    -- insert the specified values into the table ORDER5123
-    -- SET THE TOTAL TO 0
-    -- RETURN THE NEW ORDERS ORDERID
+        set @PRETURNORDERID = concat('Order ID: ', @@IDENTITY)
+    end try
 
-    -- EXCEPTIONS
+    begin catch
+        if error_number() = 547
+            throw 55002, 'User does not exist', 1
+        else
+            begin
+                declare @errormessage nvarchar(max) = error_message();
+                throw 50000, @errormessage, 1
+            end
+    end catch
+END;
+
+select * from AUTHORISEDPERSON5123
+
+go
+    begin
+        declare @OT nvarchar(24)
+        exec CREATE_ORDER @PSHIPPINGADDRESS = '1 test st', @PUSERID = 50001, @PRETURNORDERID = @OT output
+end;
+go
+select * from ORDER5123
+
+-- EXCEPTIONS
     -- USER DOES NOT EXIST : THROW ERROR 55002 : USER DOES NOT EXIST
     -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+
+---------------------------------------------Get Order By ID--------------------------------------------
+
+-- return the specified ORDER INCLUDING ALL RELATED ORDERLINES
 
 IF OBJECT_ID('GET_ORDER_BY_ID') IS NOT NULL
 DROP PROCEDURE GET_ORDER_BY_ID;
 
 GO
 
-/*
-CREATE PROCEDURE GET_ORDER_BY_ID @PORDERID INT AS
+CREATE PROCEDURE GET_ORDER_BY_ID @PORDERID INT, @PRETURNSTRING NVARCHAR(1000) AS
 BEGIN
-    -- return the specified ORDER INCLUDING ALL RELATED ORDERLINES
+    begin try
+        set @PRETURNSTRING = (select concat('Order ID : ', ORDERID,
+        ' Shipping Address: ', SHIPPINGADDRESS, ' Date Time Created: ', DATETIMECREATED, ' Date Time Dispatched: ', DATETIMEDISPATCHED,
+        ' Total: ', TOTAL, ' UserID : ', USERID ) 
+        from ORDER5123
+        where ORDERID = @PORDERID);
+
+        if @PRETURNSTRING is null
+        throw 54002, 'Order does not exist', 1
+    end try
+
+    begin catch
+        if error_number() = 54002
+        throw;
+        else
+         begin 
+            declare @ERRORMESSAGE nvarchar(max) = error_message();
+            throw 50000, @ERRORMESSAGE, 1 
+         end 
+    end catch
+END;
 
     -- EXCEPTIONS
-     -- ORDER DOES NOT EXIST THROW ERROR 54002 : ORDER DOES NOT EXIST 
-    -- for any other errors throw error : number 50000  message:  error_message()
-END;
-*/
+    -- ORDER DOES NOT EXIST THROW ERROR 54002 : ORDER DOES NOT EXIST 
+    -- for any other errors throw error : number 50000  message:  error_message()END;
+
+begin
+declare @OT nvarchar(1000)
+exec GET_ORDER_BY_ID @PORDERID = 70001, @PRETURNSTRING = @OT output
+select @OT
+end;
+
+------------------------------------------Add Product to Order------------------------------------------
 
 IF OBJECT_ID('ADD_PRODUCT_TO_ORDER') IS NOT NULL
 DROP PROCEDURE ADD_PRODUCT_TO_ORDER;
